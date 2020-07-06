@@ -27,6 +27,7 @@
     "@aws-cdk/aws-rds": "^1.49.1",
     "@aws-cdk/aws-ssm": "^1.49.1",
     "@aws-cdk/core": "^1.49.1",
+    "dotenv": "^8.2.0",
     "promise-retry": "^2.0.1",
     "source-map-support": "^0.5.16"
   }
