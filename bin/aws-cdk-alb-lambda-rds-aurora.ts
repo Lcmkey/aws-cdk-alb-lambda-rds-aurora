@@ -3,16 +3,14 @@ require("dotenv").config();
 
 import "source-map-support/register";
 import * as cdk from "@aws-cdk/core";
-import { VpcStack, RdsStack, LambdaStack } from "./../lib";
+import { VpcStack, RdsStack, LambdaStack, LoadbalancingStack } from "./../lib";
 
 // Define aws account / region / rds id && arn
 const {
   PREFIX: prefix = "[STACK PREFIX NAME]",
   STAGE: stage = "[DEPLOYMENT STAGE]",
   CDK_ACCOUNT: accountId = "[AWS ACCOUNT ID]",
-  CDK_REGION: region = "ap-southeast-1",
-  CDK_RDS_INSTANCE_ID: rdsInstanceId = "[RDS DB INSTANCE ID]",
-  CDK_RDS_INSTANCE_ARN: rdsInstanceARN = "[RDS DB INSTANCE ARN]"
+  CDK_REGION: region = "ap-southeast-1"
 } = process.env;
 
 // Define aws defulat env config
@@ -33,9 +31,23 @@ const rdsStack = new RdsStack(app, `${prefix}-${stage}-RdsStack`, {
   // env,
   prefix,
   stage,
-  vpc: vpcStack.vpc
+  securityGroup: vpcStack.rdsSecurityGroup,
+  dbSubnetGroup: vpcStack.dbSubnetGroup
 });
 
-// new LambdaStack(app, "data-api-LambdaStack", { vpc: vpcStack.vpc });
+// new CdkAuroraServerlessStack(app, "CdkAuroraServerlessStack", { env });
+
+const lambdaStack = new LambdaStack(app, `${prefix}-${stage}-LambdaStack`, {
+  prefix,
+  stage
+});
+
+new LoadbalancingStack(app, `${prefix}-${stage}-AlbStack`, {
+  prefix,
+  stage,
+  vpc: vpcStack.vpc,
+  lambda: lambdaStack.lambda,
+  securityGroup: vpcStack.lbSecurityGroup
+});
 
 app.synth();

@@ -1,82 +1,78 @@
-import { Construct, Stack, StackProps, CfnOutput } from "@aws-cdk/core";
+import { Construct, Stack, StackProps } from "@aws-cdk/core";
 import { Function, Runtime, Code } from "@aws-cdk/aws-lambda";
 import { PolicyStatement } from "@aws-cdk/aws-iam";
 import { Duration } from "@aws-cdk/core";
-import { ApplicationLoadBalancer } from "@aws-cdk/aws-elasticloadbalancingv2";
-import { LambdaTarget } from "@aws-cdk/aws-elasticloadbalancingv2-targets";
-import { Vpc, Peer, Port, SecurityGroup } from "@aws-cdk/aws-ec2";
 import { StringParameter } from "@aws-cdk/aws-ssm";
 
 interface LambdaStackProps extends StackProps {
-  readonly vpc: Vpc;
+  readonly prefix: string;
+  readonly stage: string;
 }
 
 class LambdaStack extends Stack {
+  public lambda: Function;
+
   constructor(scope: Construct, id: string, props: LambdaStackProps) {
     super(scope, id, props);
 
-    const { vpc } = props;
+    const { prefix, stage } = props;
 
-    // Save Arn to SSM, you can use it in other stack after created
-    const auroraClusterarn = StringParameter.fromStringParameterAttributes(
-      this,
-      "data-Api-Auroraserverless-Cluster-Arn",
-      {
-        parameterName: "data-api-auroraserverless-clusterarn"
-        // 'version' can be specified but is optional.
-      }
-    ).stringValue;
-    const auroraClusterid = StringParameter.fromStringParameterAttributes(
-      this,
-      "data-api-auroraserverless-cluster-Id",
-      {
-        parameterName: "data-api-auroraserverless-clusterid"
-        // 'version' can be specified but is optional.
-      }
-    ).stringValue;
-    const auroraSecretarn = StringParameter.fromStringParameterAttributes(
-      this,
-      "data-api-auroraserverless-secret-Arn",
-      {
-        parameterName: "data-api-auroraserverless-secretarn"
-        // 'version' can be specified but is optional.
-      }
-    ).stringValue;
+    // Get Value from SSM Param Store
+    const auroraClusterarn = this.getStringParamsFromSsm({
+      id: `${prefix}-${stage}-aurora-serverless-cluster-arn`,
+      name: `${prefix}-${stage}-aurora-serverless-cluster-arn`
+    });
+    const auroraClusterid = this.getStringParamsFromSsm({
+      id: `${prefix}-${stage}-aurora-serverless-cluster-id`,
+      name: `${prefix}-${stage}-aurora-serverless-cluster-id`
+    });
+    const auroraSecretarn = this.getStringParamsFromSsm({
+      id: `${prefix}-${stage}-aurora-serverless-secret-arn`,
+      name: `${prefix}-${stage}-aurora-serverless-secret-arn`
+    });
 
-    //LAMBDA
+    /**
+     * Lambda
+     */
 
-    const demoLambda = new Function(this, "demo", {
-      runtime: Runtime.NODEJS_10_X,
+    const demoLambda = new Function(this, `${prefix}-${stage}-demo`, {
+      runtime: Runtime.NODEJS_12_X,
       handler: "demo.handler",
-      code: Code.asset("./lambda"),
+      functionName: `${prefix}-${stage}-api-demo`,
+      code: Code.asset("./src/lambda"),
       environment: {
         DBCLUSTERARN: auroraClusterarn,
         DBCLUSTERID: auroraClusterid,
         SECRETARN: auroraSecretarn
       },
-      timeout: Duration.seconds(60)
+      timeout: Duration.seconds(30)
     });
 
-    const statement1 = new PolicyStatement();
-    statement1.addResources(auroraSecretarn);
-    statement1.addActions("secretsmanager:GetSecretValue");
-    demoLambda.addToRolePolicy(statement1);
+    /**
+     * PolicyStatement
+     */
+    const ssmStatement = new PolicyStatement();
+    ssmStatement.addResources(auroraSecretarn);
+    ssmStatement.addActions("secretsmanager:GetSecretValue");
+    demoLambda.addToRolePolicy(ssmStatement);
 
-    const statement2 = new PolicyStatement();
-    statement2.addResources(auroraClusterarn);
-    statement2.addActions(
+    const rdsDataStatement = new PolicyStatement();
+    rdsDataStatement.addResources(auroraClusterarn);
+    rdsDataStatement.addActions(
       "rds-data:ExecuteStatement",
       "rds-data:BatchExecuteStatement",
       "rds-data:BeginTransaction",
       "rds-data:CommitTransaction",
       "rds-data:RollbackTransaction"
     );
-    demoLambda.addToRolePolicy(statement2);
+    demoLambda.addToRolePolicy(rdsDataStatement);
 
-    const statement3 = new PolicyStatement();
-    statement3.addResources(auroraClusterarn);
-    statement3.addActions("rds:DescribeDBClusters");
-    demoLambda.addToRolePolicy(statement3);
+    const rdsStatement = new PolicyStatement();
+    rdsStatement.addResources(auroraClusterarn);
+    rdsStatement.addActions("rds:DescribeDBClusters");
+    demoLambda.addToRolePolicy(rdsStatement);
+
+    this.lambda = demoLambda;
 
     //API GW
     /*
@@ -88,28 +84,19 @@ class LambdaStack extends Stack {
     const demoResource = demoApi.addResource('demo');
     const demoMethod = demoResource.addMethod('GET', integration);
     */
+  }
 
-    //ALB
-    const securityGroup = new SecurityGroup(this, "websecurity", {
-      vpc,
-      allowAllOutbound: false
-    });
-    securityGroup.addIngressRule(Peer.anyIpv4(), Port.tcp(80));
-
-    const loadBalancer = new ApplicationLoadBalancer(this, "LB", {
-      vpc,
-      internetFacing: true,
-      securityGroup: securityGroup
-    });
-
-    const listener = loadBalancer.addListener("Listener", { port: 80 });
-    listener.addTargets("Targets", {
-      targets: [new LambdaTarget(demoLambda)]
-    });
-
-    new CfnOutput(this, "ALBHttpEndPoint", {
-      value: loadBalancer.loadBalancerDnsName
-    });
+  private getStringParamsFromSsm({
+    id,
+    name
+  }: {
+    id: string;
+    name: string;
+  }): string {
+    return StringParameter.fromStringParameterAttributes(this, id, {
+      parameterName: name
+      // 'version' can be specified but is optional.
+    }).stringValue;
   }
 }
 
