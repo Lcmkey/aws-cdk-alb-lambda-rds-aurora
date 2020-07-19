@@ -22,6 +22,8 @@
   },
   "dependencies": {
     "@aws-cdk/aws-apigateway": "^1.52.0",
+    "@aws-cdk/aws-autoscaling": "^1.52.0",
+    "@aws-cdk/aws-elasticloadbalancing": "^1.52.0",
     "@aws-cdk/aws-elasticloadbalancingv2": "^1.52.0",
     "@aws-cdk/aws-elasticloadbalancingv2-targets": "^1.52.0",
     "@aws-cdk/aws-rds": "^1.52.0",

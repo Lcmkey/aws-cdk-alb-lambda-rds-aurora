@@ -3,7 +3,7 @@ require("dotenv").config();
 
 import "source-map-support/register";
 import * as cdk from "@aws-cdk/core";
-import { VpcStack, RdsStack, LambdaStack, LoadbalancingStack } from "./../lib";
+import { VpcStack, RdsStack, LambdaStack, AlbStack, ElbStack } from "./../lib";
 
 // Define aws account / region / rds id && arn
 const {
@@ -27,12 +27,12 @@ const vpcStack = new VpcStack(app, `${prefix}-${stage}-VpcStack`, {
   stage
 });
 
-const rdsStack = new RdsStack(app, `${prefix}-${stage}-RdsStack`, {
+new RdsStack(app, `${prefix}-${stage}-RdsStack`, {
   // env,
   prefix,
   stage,
   securityGroup: vpcStack.rdsSecurityGroup,
-  dbSubnetGroup: vpcStack.dbSubnetGroup
+  subnetGroup: vpcStack.dbSubnetGroup
 });
 
 // new CdkAuroraServerlessStack(app, "CdkAuroraServerlessStack", { env });
@@ -42,12 +42,18 @@ const lambdaStack = new LambdaStack(app, `${prefix}-${stage}-LambdaStack`, {
   stage
 });
 
-new LoadbalancingStack(app, `${prefix}-${stage}-AlbStack`, {
+new AlbStack(app, `${prefix}-${stage}-AlbStack`, {
   prefix,
   stage,
   vpc: vpcStack.vpc,
   lambda: lambdaStack.lambda,
   securityGroup: vpcStack.lbSecurityGroup
+});
+
+new ElbStack(app, `${prefix}-${stage}-ElbStack`, {
+  prefix,
+  stage,
+  vpc: vpcStack.vpc
 });
 
 app.synth();

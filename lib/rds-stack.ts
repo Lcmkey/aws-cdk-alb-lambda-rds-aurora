@@ -22,7 +22,7 @@ interface RdssStackProps extends StackProps {
   readonly prefix: string;
   readonly stage: string;
   readonly securityGroup: SecurityGroup;
-  readonly dbSubnetGroup: CfnDBSubnetGroup;
+  readonly subnetGroup: CfnDBSubnetGroup;
 }
 
 class RdsStack extends Stack implements ISecretAttachmentTarget {
@@ -36,7 +36,7 @@ class RdsStack extends Stack implements ISecretAttachmentTarget {
 
     const account = Stack.of(this).account;
     const region = Stack.of(this).region;
-    const { prefix, stage, securityGroup, dbSubnetGroup } = props;
+    const { prefix, stage, securityGroup, subnetGroup } = props;
 
     // Create db secret
     const secret = new DatabaseSecret(
@@ -97,6 +97,7 @@ class RdsStack extends Stack implements ISecretAttachmentTarget {
         engineMode: "serverless",
         engineVersion: "5.6",
         databaseName: "story_books",
+        // dbClusterIdentifier: `${prefix}-${stage}`,
         masterUsername: secret.secretValueFromJson("username").toString(),
         masterUserPassword: secret.secretValueFromJson("password").toString(),
         port: 3306,
@@ -108,7 +109,7 @@ class RdsStack extends Stack implements ISecretAttachmentTarget {
           secondsUntilAutoPause: 300
         },
         vpcSecurityGroupIds: [securityGroup.securityGroupId],
-        dbSubnetGroupName: dbSubnetGroup.ref,
+        dbSubnetGroupName: subnetGroup.ref,
         // dbSubnetGroupName: dbSubnetGroup.dbSubnetGroupName
         storageEncrypted: true,
         backupRetentionPeriod: 35
@@ -120,7 +121,7 @@ class RdsStack extends Stack implements ISecretAttachmentTarget {
     });
 
     //wait for subnet group to be created
-    dbCluster.addDependsOn(dbSubnetGroup);
+    dbCluster.addDependsOn(subnetGroup);
 
     this.clusterIdentifier = dbCluster.ref;
     this.clusterArn = `arn:aws:rds:${region}:${account}:cluster:${dbCluster.ref}`;
